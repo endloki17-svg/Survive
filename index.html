@@ -1,1 +1,478 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>자연재해 무인도 서바이벌</title>
+    <!-- PeerJS 라이브러리 로드 -->
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #222; color: #fff; font-family: 'Malgun Gothic', sans-serif; overflow: hidden; }
+        .screen { display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; align-items: center; justify-content: center; flex-direction: column; }
+        .active { display: flex; }
+        
+        /* UI 스타일링 */
+        .box { background: rgba(0,0,0,0.8); padding: 30px; border-radius: 10px; border: 2px solid #555; text-align: center; max-width: 400px; width: 90%; }
+        input, select, button { margin: 10px 0; padding: 10px; width: 100%; box-sizing: border-box; font-size: 16px; }
+        button { background-color: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; }
+        button:hover { background-color: #45a049; }
+        
+        /* 게임 캔버스 */
+        #gameCanvas { display: block; width: 100%; height: 100%; background-color: #000; }
+        
+        /* 룸 UI (로비 캔버스 위에 오버레이) */
+        #roomUI { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; z-index: 10; }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 소개 화면 -->
+    <div id="introScreen" class="screen active">
+        <div class="box">
+            <h1>자연재해 무인도 서바이벌</h1>
+            <p>끝없이 몰아치는 자연재해 속에서 살아남으세요!<br>친구들과 협동하여 유령이 된 동료를 살리고 끝까지 생존해야 합니다.</p>
+            <button onclick="switchScreen('authScreen')">다음으로</button>
+        </div>
+    </div>
+
+    <!-- 2. 로그인/회원가입 화면 -->
+    <div id="authScreen" class="screen">
+        <div class="box">
+            <h2>로그인 / 임시가입</h2>
+            <input type="text" id="username" placeholder="이름 (닉네임)" required>
+            <input type="password" id="password" placeholder="비밀번호" required>
+            <button onclick="login()">게임 입장</button>
+        </div>
+    </div>
+
+    <!-- 3. 게임 메인 화면 (로비 및 실제 게임) -->
+    <div id="mainScreen" class="screen">
+        <canvas id="gameCanvas"></canvas>
+        
+        <!-- 방 만들기/참가 UI -->
+        <div id="roomUI" class="box">
+            <h2>방 설정</h2>
+            <select id="userType" onchange="toggleStudentOptions()">
+                <option value="general">일반</option>
+                <option value="student">학생</option>
+            </select>
+            
+            <div id="studentOptions" class="hidden">
+                <select id="grade">
+                    <option value="1">1학년</option>
+                    <option value="2">2학년</option>
+                    <option value="3">3학년</option>
+                    <option value="4">4학년</option>
+                    <option value="5">5학년</option>
+                    <option value="6">6학년</option>
+                </select>
+                <select id="unit">
+                    <option value="1">1단원</option>
+                    <option value="2">2단원</option>
+                    <option value="3">3단원</option>
+                </select>
+            </div>
+            
+            <hr style="border-color:#555">
+            <button onclick="createRoom()">방 만들기 (호스트)</button>
+            <input type="text" id="joinCode" placeholder="참가할 코드 (3자리)" maxlength="3">
+            <button onclick="joinRoom()" style="background-color: #2196F3;">방 참가하기</button>
+            <button onclick="closeRoomUI()" style="background-color: #f44336;">닫기</button>
+        </div>
+    </div>
+
+<script>
+    // --- 1. 이미지 에셋 로드 ---
+    const imgLobby = new Image(); imgLobby.src = 'lobby.png';
+    const imgCity = new Image(); imgCity.src = 'city.png';
+    const imgDisaster = new Image(); imgDisaster.src = 'survive.png';
+    const imgCharacter = new Image(); imgCharacter.src = 'character.png'; // 1051.png의 이름 변경 권장
+
+    // --- 2. 전역 변수 및 상태 관리 ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let gameState = 'lobby'; // 'lobby', 'playing', 'gameover'
+    let myName = '';
+    
+    // 플레이어 객체
+    const player = {
+        x: 400, y: 500, width: 40, height: 60, speed: 5,
+        hp: 100, maxHp: 100, state: 'alive', // 'alive', 'ghost'
+        reviveClicks: 0 // 유령 상태일 때 부활까지 남은 터치 수
+    };
+    
+    // 키 입력 상태
+    const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+    
+    // 멀티플레이 관련 변수
+    let peer = null;
+    let connections = []; // 연결된 다른 플레이어들
+    let roomCode = '';
+    let isHost = false;
+    let otherPlayers = {}; // { peerId: { x, y, hp, state, name } }
+    
+    // 게임 시스템 변수
+    let disasters = [];
+    let gameTime = 0;
+    let camera = { x: 0, y: 0, zoom: 2.5 }; // 맵 줌인 효과를 위한 변수
+
+    // 리사이즈 처리
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- 3. UI 및 화면 전환 로직 ---
+    function switchScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    function login() {
+        const nameInput = document.getElementById('username').value;
+        if(nameInput.trim() === '') return alert('이름을 입력해주세요!');
+        myName = nameInput;
+        switchScreen('mainScreen');
+        gameState = 'lobby';
+        requestAnimationFrame(gameLoop);
+    }
+
+    function toggleStudentOptions() {
+        const type = document.getElementById('userType').value;
+        const opt = document.getElementById('studentOptions');
+        if(type === 'student') opt.classList.remove('hidden');
+        else opt.classList.add('hidden');
+    }
+
+    function closeRoomUI() {
+        document.getElementById('roomUI').style.display = 'none';
+        // 로비 중앙으로 플레이어 튕겨내기 (연속 트리거 방지)
+        player.y += 50; 
+    }
+
+    // --- 4. PeerJS 멀티플레이 통신 로직 ---
+    function generateCode() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for(let i=0; i<3; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+        return code;
+    }
+
+    function initPeer(id, callback) {
+        // 임의의 접두사를 붙여 3자리 코드가 공용서버에서 충돌하지 않게 방지
+        const fullId = "disaster_survival_" + id; 
+        peer = new Peer(fullId);
+        
+        peer.on('open', (pid) => {
+            console.log('Peer connected with ID:', pid);
+            if(callback) callback();
+        });
+
+        peer.on('connection', (conn) => {
+            setupConnection(conn);
+        });
+        
+        peer.on('error', (err) => {
+            alert('연결 에러! 코드를 확인하거나 다시 시도해주세요.');
+            console.error(err);
+        });
+    }
+
+    function setupConnection(conn) {
+        connections.push(conn);
+        conn.on('data', (data) => {
+            if(data.type === 'update') {
+                otherPlayers[conn.peer] = data.playerInfo;
+            } else if (data.type === 'start') {
+                startGamePlay();
+            } else if (data.type === 'revive_click') {
+                if(player.state === 'ghost') {
+                    player.reviveClicks++;
+                    if(player.reviveClicks >= 5) { // 5번 클릭/터치 시 부활
+                        player.state = 'alive';
+                        player.hp = 50;
+                        player.reviveClicks = 0;
+                    }
+                }
+            }
+        });
+    }
+
+    function createRoom() {
+        roomCode = generateCode();
+        isHost = true;
+        initPeer(roomCode, () => {
+            alert(`방이 생성되었습니다! 공유 코드: [ ${roomCode} ]\n학생 설정은 내부 로직에 저장되었습니다.`);
+            // 게임 시작 신호를 모든 참가자에게 전송 (호스트 로직)
+            setInterval(() => {
+                if(connections.length > 0) startGamePlay();
+            }, 1000); // 실제로는 '게임 시작' 버튼을 UI에 추가하는 것이 좋습니다.
+            startGamePlay();
+        });
+        document.getElementById('roomUI').style.display = 'none';
+    }
+
+    function joinRoom() {
+        roomCode = document.getElementById('joinCode').value.toUpperCase();
+        if(roomCode.length !== 3) return alert('3자리 코드를 입력하세요.');
+        isHost = false;
+        
+        initPeer("client_" + generateCode(), () => {
+            const conn = peer.connect("disaster_survival_" + roomCode);
+            conn.on('open', () => {
+                setupConnection(conn);
+                alert('방에 접속했습니다! 호스트가 시작할 때까지 기다리세요.');
+            });
+        });
+        document.getElementById('roomUI').style.display = 'none';
+    }
+
+    function broadcastState() {
+        if(!peer) return;
+        const myData = {
+            type: 'update',
+            playerInfo: { x: player.x, y: player.y, hp: player.hp, state: player.state, name: myName }
+        };
+        connections.forEach(conn => {
+            if(conn.open) conn.send(myData);
+        });
+    }
+
+    function startGamePlay() {
+        if(gameState === 'playing') return;
+        gameState = 'playing';
+        player.x = canvas.width / 2;
+        player.y = canvas.height / 2;
+        
+        if(isHost) {
+            // 호스트만 재해 생성 로직 담당
+            setInterval(spawnDisaster, 2000);
+            connections.forEach(conn => conn.send({type: 'start'}));
+        }
+    }
+
+    // --- 5. 게임 로직 (재해, 충돌, 렌더링) ---
+    
+    // 키보드 이벤트
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    // 부활을 위한 클릭/터치 이벤트
+    canvas.addEventListener('mousedown', handleInteract);
+    canvas.addEventListener('touchstart', handleInteract);
+
+    function handleInteract(e) {
+        if(gameState !== 'playing') return;
+        
+        // 클릭한 화면 좌표를 게임 내 월드 좌표로 변환
+        const rect = canvas.getBoundingClientRect();
+        let clientX = e.clientX || e.touches[0].clientX;
+        let clientY = e.clientY || e.touches[0].clientY;
+        
+        let worldX = (clientX - canvas.width/2) / camera.zoom + camera.x;
+        let worldY = (clientY - canvas.height/2) / camera.zoom + camera.y;
+
+        // 다른 플레이어(유령)를 클릭했는지 확인
+        Object.keys(otherPlayers).forEach(id => {
+            let op = otherPlayers[id];
+            if(op.state === 'ghost') {
+                let dist = Math.hypot(op.x - worldX, op.y - worldY);
+                if(dist < 50) { // 클릭 범위
+                    // 호스트/클라이언트 상관없이 해당 플레이어에게 부활 클릭 신호 전송
+                    let conn = connections.find(c => c.peer === id);
+                    if(conn && conn.open) conn.send({type: 'revive_click'});
+                }
+            }
+        });
+    }
+
+    function spawnDisaster() {
+        gameTime++;
+        // 시간이 지날수록 크기와 위협도(속도/피해량)가 증가
+        let scaleMultiplier = 1 + (gameTime * 0.05); 
+        
+        disasters.push({
+            x: camera.x + (Math.random() - 0.5) * canvas.width, 
+            y: camera.y - canvas.height, // 하늘에서 떨어지거나 위에서 시작
+            speedX: (Math.random() - 0.5) * 5,
+            speedY: (Math.random() * 2 + 2) * scaleMultiplier,
+            size: 50 * scaleMultiplier,
+            type: Math.floor(Math.random() * 3) // 0: 운석, 1: 토네이도, 2: 화산재
+        });
+    }
+
+    function update() {
+        // 플레이어 이동 로직 (유령일 때도 이동은 가능하나 느리게)
+        let currentSpeed = player.state === 'ghost' ? player.speed * 0.5 : player.speed;
+        
+        if (keys.ArrowUp) player.y -= currentSpeed;
+        if (keys.ArrowDown) player.y += currentSpeed;
+        if (keys.ArrowLeft) player.x -= currentSpeed;
+        if (keys.ArrowRight) player.x += currentSpeed;
+
+        if (gameState === 'lobby') {
+            // 로비에서 '게임 시작' 동굴 위치 근처(위쪽 중앙)로 가면 UI 오픈
+            // 이 좌표는 lobby.png 이미지 비율에 맞춰 조정해야 합니다.
+            if (player.y < canvas.height * 0.3 && player.x > canvas.width * 0.4 && player.x < canvas.width * 0.6) {
+                document.getElementById('roomUI').style.display = 'block';
+            }
+        } else if (gameState === 'playing') {
+            // 카메라가 플레이어를 따라가도록
+            camera.x = player.x;
+            camera.y = player.y;
+
+            // 재해 업데이트 로직 (호스트 기준)
+            if(isHost) {
+                for (let i = disasters.length - 1; i >= 0; i--) {
+                    let d = disasters[i];
+                    d.x += d.speedX;
+                    d.y += d.speedY;
+                    
+                    // 수명이 다하거나 화면 한참 밖으로 나가면 삭제
+                    if (d.y > camera.y + canvas.height) {
+                        disasters.splice(i, 1);
+                        continue;
+                    }
+                    
+                    // 나와의 충돌 체크
+                    if (player.state === 'alive') {
+                        let dist = Math.hypot(player.x - d.x, player.y - d.y);
+                        if (dist < d.size / 2 + player.width / 2) {
+                            player.hp -= 10;
+                            disasters.splice(i, 1); // 맞으면 재해 소멸
+                            if (player.hp <= 0) {
+                                player.hp = 0;
+                                player.state = 'ghost';
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 모든 플레이어가 유령인지 확인 (게임오버 조건)
+            let allGhosts = player.state === 'ghost';
+            Object.values(otherPlayers).forEach(p => {
+                if(p.state !== 'ghost') allGhosts = false;
+            });
+            if(allGhosts && (Object.keys(otherPlayers).length > 0 || isHost)) {
+                gameState = 'gameover';
+            }
+        }
+        
+        // 내 상태 브로드캐스트
+        if(gameTime % 2 === 0) broadcastState(); 
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (gameState === 'lobby') {
+            // 로비 이미지 그리기 (화면 꽉 차게)
+            if(imgLobby.complete) {
+                ctx.drawImage(imgLobby, 0, 0, canvas.width, canvas.height);
+            }
+            drawCharacter(player.x, player.y, player.state, myName, true);
+            
+        } else if (gameState === 'playing') {
+            ctx.save();
+            // 카메라 중심 이동 및 맵 줌인
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(-camera.x, -camera.y);
+
+            // 실제 맵 이미지 그리기 (엄청 확대된 효과)
+            if(imgCity.complete) {
+                ctx.drawImage(imgCity, 0, 0, imgCity.width, imgCity.height, 0, 0, imgCity.width, imgCity.height);
+            }
+
+            // 다른 플레이어 그리기
+            Object.values(otherPlayers).forEach(p => {
+                drawCharacter(p.x, p.y, p.state, p.name, false);
+            });
+
+            // 내 캐릭터 그리기
+            drawCharacter(player.x, player.y, player.state, myName, true);
+
+            // 재해 그리기
+            if (imgDisaster.complete) {
+                disasters.forEach(d => {
+                    /* 주의: 여기서 (0,0,100,100)은 survive.png에서 특정 재해 이미지를 
+                       잘라오는 픽셀 좌표입니다. 실제 이미지에 맞춰 이 부분을 수정해야 합니다. */
+                    let srcX = 0, srcY = 0, srcW = 100, srcH = 100; 
+                    if(d.type === 1) { srcX = 100; } // 예시
+                    
+                    ctx.drawImage(imgDisaster, srcX, srcY, srcW, srcH, d.x - d.size/2, d.y - d.size/2, d.size, d.size);
+                });
+            }
+            ctx.restore();
+
+            // UI (체력바 등) 고정 렌더링
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText(`생존 시간: ${gameTime}`, 20, 40);
+            
+            // 내 체력바
+            ctx.fillStyle = 'red';
+            ctx.fillRect(20, 60, 200, 20);
+            ctx.fillStyle = 'green';
+            ctx.fillRect(20, 60, (player.hp / player.maxHp) * 200, 20);
+            ctx.fillStyle = 'white';
+            ctx.fillText(player.state === 'ghost' ? "유령 상태 (부활 대기)" : `HP: ${player.hp}`, 25, 75);
+
+        } else if (gameState === 'gameover') {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'red';
+            ctx.font = '50px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText("모두 유령이 되었습니다... 게임 오버", canvas.width/2, canvas.height/2);
+        }
+    }
+
+    // 캐릭터 스프라이트 렌더링 함수
+    function drawCharacter(x, y, state, name, isMe) {
+        ctx.save();
+        if (state === 'ghost') {
+            ctx.globalAlpha = 0.4; // 유령 상태 반투명화
+        }
+        
+        if (imgCharacter.complete) {
+            /* 주의: 1051.png (캐릭터 이미지)에서 첫 번째 캐릭터의 머리~발끝 좌표입니다.
+               이미지의 실제 픽셀을 확인하시어 (srcX, srcY, srcW, srcH)를 조절하세요. */
+            ctx.drawImage(imgCharacter, 0, 0, 60, 100, x - player.width/2, y - player.height, player.width, player.height);
+        } else {
+            // 이미지가 없을 때 대체 사각형
+            ctx.fillStyle = isMe ? 'blue' : 'yellow';
+            ctx.fillRect(x - player.width/2, y - player.height, player.width, player.height);
+        }
+        
+        // 닉네임 텍스트
+        ctx.fillStyle = 'white';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(name, x, y - player.height - 10);
+        
+        // 유령일 경우 부활 게이지 표시
+        if(state === 'ghost' && isMe) {
+            ctx.fillStyle = 'cyan';
+            ctx.fillText(`터치해서 부활: ${player.reviveClicks}/5`, x, y - player.height - 30);
+        }
+        
+        ctx.restore();
+    }
+
+    // 메인 루프
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+</script>
+</body>
+</html>
 
