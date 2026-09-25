@@ -3,439 +3,379 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SURVIVE: PIXEL WORLD</title>
+    <title>SURVIVE: URBAN DISASTER</title>
+    <!-- 실시간 멀티플레이용 PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+    <!-- 레트로 픽셀 폰트 -->
     <link href="https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css" rel="stylesheet">
     <style>
-        /* === 글로벌 레트로 픽셀 설정 === */
-        * { box-sizing: border-box; image-rendering: pixelated; }
-        body, html { 
-            margin: 0; padding: 0; width: 100%; height: 100%; 
-            background-color: #181425; color: #fff; 
-            font-family: 'Galmuri11', sans-serif; 
-            overflow: hidden; touch-action: none; user-select: none;
-        }
-
-        /* CRT 스캔라인 효과 */
+        /* === 코어 픽셀 아트 스타일 === */
+        * { box-sizing: border-box; image-rendering: pixelated; font-family: 'Galmuri11', sans-serif; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #0d0e15; color: #fff; overflow: hidden; touch-action: none; user-select: none; }
+        
+        /* CRT 모니터 효과 */
         body::after {
             content: ""; display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.15) 50%);
+            background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.2) 50%);
             background-size: 100% 4px; z-index: 999; pointer-events: none;
         }
 
         .view { display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 10; flex-direction: column; align-items: center; justify-content: center; }
         .view.active { display: flex; }
 
-        /* === 픽셀 패널 및 UI === */
+        /* === 레트로 UI 패널 === */
         .pixel-panel {
-            background: #262b44; border: 4px solid #fff;
-            box-shadow: inset -4px -4px 0px 0px #181425, 4px 4px 0px 0px #000;
-            padding: 30px; width: 90%; max-width: 450px; text-align: center; position: relative;
+            background: #1e1e24; border: 4px solid #fff;
+            box-shadow: inset -4px -4px 0px 0px #000, 6px 6px 0px 0px rgba(0,0,0,0.7);
+            padding: 30px; width: 90%; max-width: 480px; text-align: center; position: relative;
         }
         
-        .pixel-title { color: #ffcd75; font-size: 32px; text-shadow: 2px 2px 0px #e43b44, 4px 4px 0px #181425; margin: 0 0 20px 0; letter-spacing: 1px; }
+        .pixel-title { color: #facc15; font-size: 36px; text-shadow: 3px 3px 0px #b91c1c, 6px 6px 0px #000; margin: 0 0 25px 0; letter-spacing: 2px; }
 
-        .pixel-input {
-            width: 100%; padding: 12px; margin-bottom: 15px; background: #181425; color: #fff; 
-            border: 4px solid #5a6988; font-family: 'Galmuri11', sans-serif; font-size: 16px; outline: none;
+        .pixel-input, .pixel-select {
+            width: 100%; padding: 14px; margin-bottom: 15px; background: #0d0e15; color: #fff; 
+            border: 4px solid #4b5563; font-size: 16px; outline: none; transition: 0.2s;
         }
-        .pixel-input:focus { border-color: #ffcd75; }
+        .pixel-input:focus, .pixel-select:focus { border-color: #facc15; }
 
         .pixel-btn {
-            width: 100%; padding: 15px; margin-bottom: 10px; background: #e43b44; color: #fff; 
-            border: 4px solid #fff; font-family: 'Galmuri11', sans-serif; font-size: 18px; cursor: pointer;
-            box-shadow: inset -4px -4px 0px 0px rgba(0,0,0,0.4), 4px 4px 0px 0px #181425; transition: 0.1s;
+            width: 100%; padding: 16px; margin-bottom: 12px; background: #b91c1c; color: #fff; 
+            border: 4px solid #fff; font-size: 18px; font-weight: bold; cursor: pointer;
+            box-shadow: inset -4px -4px 0px 0px rgba(0,0,0,0.5), 4px 4px 0px 0px #000; text-shadow: 2px 2px 0px #000;
         }
-        .pixel-btn:active { box-shadow: inset 4px 4px 0px 0px rgba(0,0,0,0.4), 0 0 0 0 #181425; transform: translate(4px, 4px); }
-        .pixel-btn.blue { background: #0099db; }
-        .pixel-btn.green { background: #3e8948; }
-        .pixel-btn.dark { background: #5a6988; }
-        .pixel-btn.small { padding: 8px; font-size: 14px; width: auto; }
+        .pixel-btn:active { box-shadow: inset 4px 4px 0px 0px rgba(0,0,0,0.5), 0 0 0 0 #000; transform: translate(4px, 4px); }
+        .pixel-btn.blue { background: #0284c7; }
+        .pixel-btn.green { background: #16a34a; }
+        .pixel-btn.dark { background: #4b5563; }
 
-        /* 캐릭터 선택 그리드 */
-        .char-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
-        .char-box { background: #181425; border: 2px solid #5a6988; padding: 10px 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: 0.2s; }
-        .char-box.selected { border-color: #ffcd75; background: #3a4466; transform: scale(1.05); }
-        .char-preview { width: 48px; height: 48px; margin-bottom: 5px; }
+        /* 탭 메뉴 */
+        .tabs { display: flex; margin-bottom: 20px; border-bottom: 4px solid #4b5563; }
+        .tab { flex: 1; padding: 12px; background: #1e1e24; cursor: pointer; color: #9ca3af; font-weight: bold; transition: 0.2s; }
+        .tab.active { background: #4b5563; color: #fff; border: 4px solid #fff; border-bottom: none; }
 
-        /* === 모달 (상점, 설정) === */
-        .modal-overlay { display: none; position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
-        .modal-overlay.active { display: flex; }
-        .shop-item { display: flex; justify-content: space-between; align-items: center; background: #181425; border: 2px solid #5a6988; padding: 10px; margin-bottom: 10px; text-align: left; }
-        
-        /* === 인게임 UI === */
+        /* 캐릭터 그리드 */
+        .char-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+        .char-box { background: #0d0e15; border: 2px solid #4b5563; padding: 10px; cursor: pointer; display: flex; justify-content: center; transition: 0.2s; }
+        .char-box.selected { border-color: #facc15; background: #374151; transform: scale(1.1); box-shadow: 4px 4px 0 #000; }
+        .char-preview { width: 48px; height: 48px; }
+
+        /* === 게임 HUD === */
         #gameCanvas { position: absolute; top: 0; left: 0; z-index: 1; }
         
-        #hud { position: absolute; top: 15px; left: 15px; z-index: 5; pointer-events: none; display: none; width: calc(100% - 30px); justify-content: space-between;}
-        .hud-left { display: flex; flex-direction: column; gap: 5px; }
-        .hp-frame { border: 4px solid #fff; background: #181425; width: 220px; height: 26px; position: relative; box-shadow: 4px 4px 0px #000; }
-        #hpBar { height: 100%; background: #3e8948; width: 100%; transition: width 0.2s; }
-        .hud-text { position: absolute; top: 2px; width: 100%; text-align: center; font-size: 14px; text-shadow: 2px 2px 0px #000; font-weight: bold; }
-        .info-box { background: #262b44; border: 4px solid #fff; padding: 8px 12px; display: inline-block; box-shadow: 4px 4px 0px #000; font-size: 14px; text-shadow: 1px 1px 0px #000;}
+        #hud { position: absolute; top: 15px; left: 15px; right: 15px; z-index: 5; display: none; justify-content: space-between; pointer-events: none; }
+        .info-box { background: rgba(30,30,36,0.9); border: 4px solid #fff; padding: 10px 15px; box-shadow: 4px 4px 0px #000; font-size: 16px; margin-bottom: 10px; display: inline-block;}
+        .hp-frame { border: 4px solid #fff; background: #000; width: 250px; height: 30px; position: relative; box-shadow: 4px 4px 0px #000; }
+        #hpBar { height: 100%; background: #16a34a; width: 100%; transition: width 0.2s; }
+        .hp-text { position: absolute; top: 3px; width: 100%; text-align: center; font-weight: bold; text-shadow: 2px 2px 0px #000; }
         
-        .hud-right { pointer-events: auto; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
-        
-        /* 인벤토리 (퀵슬롯) */
-        .inventory { display: flex; gap: 10px; }
-        .inv-slot { width: 50px; height: 50px; background: rgba(24,20,37,0.8); border: 2px solid #fff; box-shadow: 2px 2px 0px #000; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer; pointer-events: auto; }
-        .inv-count { position: absolute; bottom: 2px; right: 4px; font-size: 12px; color: #ffcd75; font-weight: bold; text-shadow: 1px 1px 0px #000; }
+        .alert-box { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); background: rgba(185, 28, 28, 0.9); border: 4px solid #fff; padding: 15px 30px; font-size: 24px; color: #fff; text-shadow: 2px 2px 0 #000; display: none; z-index: 6; box-shadow: 6px 6px 0 #000; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.05); } 100% { transform: translateX(-50%) scale(1); } }
 
         /* 모바일 조이스틱 */
-        #joyZone { position: absolute; bottom: 30px; left: 30px; width: 130px; height: 130px; z-index: 10; display: none; }
-        #joyBase { width: 100%; height: 100%; background: rgba(24, 20, 37, 0.4); border: 4px solid rgba(255,255,255,0.4); border-radius: 50%; position: relative; }
-        #joyStick { width: 50px; height: 50px; background: #e43b44; border: 4px solid #fff; border-radius: 50%; position: absolute; top: 36px; left: 36px; pointer-events: none; }
+        #joyZone { position: absolute; bottom: 40px; left: 40px; width: 140px; height: 140px; z-index: 10; display: none; pointer-events: auto; }
+        #joyBase { width: 100%; height: 100%; background: rgba(255, 255, 255, 0.1); border: 4px solid rgba(255,255,255,0.4); border-radius: 50%; position: relative; backdrop-filter: blur(4px); }
+        #joyStick { width: 60px; height: 60px; background: rgba(250, 204, 21, 0.8); border: 4px solid #fff; border-radius: 50%; position: absolute; top: 36px; left: 36px; pointer-events: none; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
     </style>
 </head>
 <body>
 
-    <!-- 1. 타이틀 화면 -->
-    <div id="landingView" class="view active" style="background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVQIW2NkYGD4z8DAwMgAI0AMCKcCBEdy2rQAAAAASUVORK5CYII=') repeat; background-size: 64px 64px;" onclick="navTo('lobbyView')">
-        <h1 class="pixel-title" style="font-size: 50px;">SURVIVE<br><span style="font-size: 24px; color:#fff;">PIXEL WORLD</span></h1>
-        <div style="color: #fff; font-size: 20px; animation: blink 1s infinite; margin-top: 40px;">화면을 터치하여 접속</div>
-    </div>
-    <style>@keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }</style>
+    <!-- 1. 로그인 & 회원가입 뷰 -->
+    <div id="authView" class="view active">
+        <div class="pixel-panel">
+            <h1 class="pixel-title" style="font-size: 42px;">URBAN<br>SURVIVE</h1>
+            
+            <div class="tabs">
+                <div class="tab active" id="tabLogin" onclick="switchTab('login')">로그인</div>
+                <div class="tab" id="tabSignup" onclick="switchTab('signup')">회원가입</div>
+            </div>
 
-    <!-- 2. 로비 화면 -->
+            <!-- 로그인 폼 -->
+            <div id="formLogin">
+                <input type="text" id="loginId" class="pixel-input" placeholder="계정 아이디" autocomplete="off">
+                <input type="password" id="loginPw" class="pixel-input" placeholder="비밀번호">
+                <button class="pixel-btn" onclick="processLogin()">도시 진입 (로그인)</button>
+            </div>
+
+            <!-- 회원가입 폼 -->
+            <div id="formSignup" style="display: none;">
+                <input type="text" id="regId" class="pixel-input" placeholder="생성할 아이디">
+                <input type="password" id="regPw" class="pixel-input" placeholder="비밀번호">
+                <button class="pixel-btn blue" onclick="processSignup()">생존자 등록</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 대기실 (로비) 뷰 -->
     <div id="lobbyView" class="view">
         <div class="pixel-panel" style="max-width: 550px;">
-            <h2 class="pixel-title" style="font-size: 24px;">베이스 캠프</h2>
+            <h2 class="pixel-title" style="font-size: 28px;">안전 가옥 (로비)</h2>
             
-            <input type="text" id="playerName" class="pixel-input" placeholder="플레이어 닉네임 입력" value="생존자">
-
-            <p style="text-align: left; margin: 0 0 10px 0; color: #8b9bb4; font-size: 14px;">생존자(캐릭터) 선택</p>
+            <div style="text-align: left; margin-bottom: 5px; color:#9ca3af;">캐릭터 요원 선택</div>
             <div class="char-grid">
-                <div class="char-box selected" onclick="selectChar(0)"><canvas id="cp0" class="char-preview"></canvas><span style="font-size:12px;color:#3e8948">슬라임</span></div>
-                <div class="char-box" onclick="selectChar(1)"><canvas id="cp1" class="char-preview"></canvas><span style="font-size:12px;color:#8b9bb4">로봇</span></div>
-                <div class="char-box" onclick="selectChar(2)"><canvas id="cp2" class="char-preview"></canvas><span style="font-size:12px;color:#f9a31b">냥이</span></div>
-                <div class="char-box" onclick="selectChar(3)"><canvas id="cp3" class="char-preview"></canvas><span style="font-size:12px;color:#b55088">마법사</span></div>
-                <div class="char-box" onclick="selectChar(4)"><canvas id="cp4" class="char-preview"></canvas><span style="font-size:12px;color:#ffcd75">기사</span></div>
-                <div class="char-box" onclick="selectChar(5)"><canvas id="cp5" class="char-preview"></canvas><span style="font-size:12px;color:#ffffff">유령</span></div>
+                <div class="char-box selected" onclick="selectChar(0)"><canvas id="cp0" class="char-preview"></canvas></div>
+                <div class="char-box" onclick="selectChar(1)"><canvas id="cp1" class="char-preview"></canvas></div>
+                <div class="char-box" onclick="selectChar(2)"><canvas id="cp2" class="char-preview"></canvas></div>
+                <div class="char-box" onclick="selectChar(3)"><canvas id="cp3" class="char-preview"></canvas></div>
             </div>
 
-            <div style="display:flex; gap:10px; margin-bottom: 20px;">
-                <button class="pixel-btn dark" onclick="openModal('shopModal')">💰 상점</button>
-                <button class="pixel-btn dark" onclick="openModal('settingModal')">⚙️ 설정</button>
+            <div style="display: flex; gap: 10px;">
+                <select id="userType" class="pixel-select" onchange="toggleStudentMode()">
+                    <option value="general">일반 생존 모드</option>
+                    <option value="student">학생 교육 모드 (재해 문제 출제)</option>
+                </select>
+                <select id="gradeSelect" class="pixel-select" style="display:none; width: 140px;">
+                    <option value="1">초등 1학년</option>
+                    <option value="2">초등 2학년</option>
+                    <option value="3">초등 3학년</option>
+                    <option value="4">초등 4학년</option>
+                    <option value="5">초등 5학년</option>
+                    <option value="6" selected>초등 6학년</option>
+                </select>
             </div>
 
-            <button class="pixel-btn green" onclick="createRoom()">호스트로 방 생성</button>
-            
-            <div style="display:flex; gap:10px; margin-top:10px;">
-                <input type="text" id="joinCode" class="pixel-input" style="margin:0; text-transform: uppercase;" placeholder="코드 (3자리)" maxlength="3">
-                <button class="pixel-btn blue" style="margin:0; width:120px;" onclick="joinRoom()">참여</button>
+            <hr style="border: 2px solid #4b5563; margin: 15px 0;">
+
+            <button class="pixel-btn green" onclick="createRoom()">[호스트] 도시 방 생성</button>
+            <div style="display: flex; gap: 10px; margin-top: 5px;">
+                <input type="text" id="joinCode" class="pixel-input" style="margin: 0; text-transform: uppercase;" placeholder="접속 코드 (3자리)" maxlength="3">
+                <button class="pixel-btn blue" style="margin: 0; width: 130px;" onclick="joinRoom()">합류</button>
             </div>
         </div>
     </div>
 
-    <!-- 3. 상점 모달 -->
-    <div id="shopModal" class="modal-overlay">
-        <div class="pixel-panel">
-            <h2 class="pixel-title" style="font-size: 24px;">아이템 상점</h2>
-            <p style="color:#ffcd75; margin-bottom: 20px;">보유 코인: <span id="coinDisplay">0</span> C</p>
-            
-            <div class="shop-item">
-                <div>
-                    <strong style="color:#e43b44;">❤️ 구급상자</strong><br>
-                    <span style="font-size:12px; color:#8b9bb4;">사용 시 HP 40 회복</span>
-                </div>
-                <button class="pixel-btn green small" onclick="buyItem('heal', 30)">30 C</button>
-            </div>
-            
-            <div class="shop-item">
-                <div>
-                    <strong style="color:#0099db;">⚡ 에너지 부츠</strong><br>
-                    <span style="font-size:12px; color:#8b9bb4;">10초간 이동속도 대폭 증가</span>
-                </div>
-                <button class="pixel-btn green small" onclick="buyItem('speed', 50)">50 C</button>
-            </div>
-
-            <button class="pixel-btn dark" style="margin-top:20px;" onclick="closeModal('shopModal')">닫기</button>
-        </div>
-    </div>
-
-    <!-- 4. 설정 모달 -->
-    <div id="settingModal" class="modal-overlay">
-        <div class="pixel-panel">
-            <h2 class="pixel-title" style="font-size: 24px;">게임 설정</h2>
-            <div class="shop-item">
-                <span>배경음악 (BGM)</span>
-                <button id="btnBgm" class="pixel-btn blue small" onclick="toggleSetting('bgm')">ON</button>
-            </div>
-            <div class="shop-item">
-                <span>효과음 (SFX)</span>
-                <button id="btnSfx" class="pixel-btn blue small" onclick="toggleSetting('sfx')">ON</button>
-            </div>
-            <button class="pixel-btn dark" style="margin-top:20px;" onclick="closeModal('settingModal')">저장 후 닫기</button>
-        </div>
-    </div>
-
-    <!-- 5. 인게임 화면 -->
+    <!-- 3. 인게임 뷰 -->
     <canvas id="gameCanvas"></canvas>
-    <div id="joyZone"><div id="joyBase"><div id="joyStick"></div></div></div>
     
     <div id="hud">
-        <div class="hud-left">
-            <div class="info-box">⏱️ 생존: <span id="timeVal" style="color:#ffcd75;">0</span>초 | 🪙 코인: <span id="inGameCoin">0</span></div>
+        <div style="pointer-events: auto;">
+            <div class="info-box">
+                <span style="color:#facc15;">생존 시간:</span> <span id="timeVal">0</span>초<br>
+                <span style="color:#60a5fa; font-size: 14px;">방 코드: <span id="hudCode"></span></span>
+            </div>
             <div class="hp-frame">
                 <div id="hpBar"></div>
-                <div class="hud-text" id="hpText">100 / 100</div>
+                <div class="hp-text" id="hpText">100 / 100</div>
             </div>
-            <div class="info-box" style="font-size: 12px; margin-top:5px;">방 코드: <span id="hudCode" style="color:#0099db;"></span></div>
         </div>
-        
-        <div class="hud-right">
-            <button class="pixel-btn dark small" style="margin:0;" onclick="openModal('shopModal')">🛒 상점</button>
-            <div class="inventory">
-                <div class="inv-slot" onclick="useItem('heal')">
-                    <span style="font-size: 24px;">❤️</span>
-                    <div class="inv-count" id="invHeal">0</div>
-                </div>
-                <div class="inv-slot" onclick="useItem('speed')">
-                    <span style="font-size: 24px;">⚡</span>
-                    <div class="inv-count" id="invSpeed">0</div>
-                </div>
-            </div>
+        <div style="pointer-events: auto; text-align: right;">
+            <button class="pixel-btn dark" style="padding: 10px; width: auto; font-size: 14px;" onclick="alert('상점은 다음 업데이트에 적용됩니다.')">🛒 보급 상점</button>
         </div>
     </div>
+    
+    <div id="disasterAlert" class="alert-box">⚠️ 쓰나미 경보! 건물 옥상으로 대피하세요!</div>
+    
+    <div id="joyZone"><div id="joyBase"><div id="joyStick"></div></div></div>
 
 <script>
     /* =========================================================================
-       [ 1. 픽셀 아트 엔진 & 데이터 (인간 외 캐릭터, 맵 꾸미기) ]
+       [ 1. 정교한 도시 맵 및 캐릭터 픽셀 렌더링 엔진 ]
        ========================================================================= */
     const Pal = {
-        '0': null,       '1': '#181425', // 투명, 검정테두리
-        '2': '#ffcd75',  '3': '#e43b44', // 살구색, 빨강
-        '4': '#0099db',  '5': '#3e8948', // 파랑, 초록
-        '6': '#b55088',  '7': '#ffffff', // 보라, 흰색
-        '8': '#8b9bb4',  '9': '#5a6988', // 밝은회색, 짙은회색
-        'a': '#8f563b',  'b': '#2ce8f5', // 갈색, 밝은하늘
-        'c': '#f9a31b',  'd': '#fbb954', // 주황, 모래색
-        'e': '#265c42',  'f': '#fee761'  // 짙은초록, 노랑
+        '0': null, '1': '#000000', // 투명, 검정(테두리)
+        '2': '#fcd34d', '3': '#b91c1c', // 피부, 빨강요원
+        '4': '#0ea5e9', '5': '#22c55e', // 파랑요원, 좀비/초록
+        '6': '#8b5cf6', '7': '#ffffff', // 보라요원, 흰색
+        '8': '#581c87', '9': '#fbbf24'  // 좀비옷, 노랑포인트
     };
 
-    // 캐릭터 6종 (슬라임, 로봇, 고양이, 마법사, 기사, 유령)
+    // 캐릭터 4종 + 좀비 스프라이트 (16x16)
     const CharData = [
-        [ // 0: 슬라임 (몬스터형)
-            "0000000000000000","0000000000000000","0000001111000000","0000015555100000",
-            "0000155555510000","0001555555551000","0015555555555100","0015515555155100",
-            "0155515555155510","0155515555155510","0155555555555510","0155551111555510",
-            "0155555555555510","0015555555555100","0001111111111000","0000000000000000"
+        [ // Red Agent
+            "0000011111100000","0000133333310000","0001333333331000","0001122222211000",
+            "0012211221122100","0012222222222100","0012122222212100","0001111111111000",
+            "0000133333310000","0001331331331000","0001713333171000","0001713333171000",
+            "0000111111110000","0000111001110000","0001111001111000","0001111001111000"
         ],
-        [ // 1: 로봇 (메카형)
-            "0000000110000000","0000000131000000","0000000181000000","0000111111110000",
-            "0001888888881000","0018811881188100","001881b881b88100","0018811881188100",
-            "0018888888888100","0001111111111000","0000199999910000","0001999999991000",
-            "0001999119991000","0001999119991000","0001111001111000","0000000000000000"
+        [ // Blue Agent (색상만 4)
+            "0000011111100000","0000144444410000","0001444444441000","0001122222211000",
+            "0012211221122100","0012222222222100","0012122222212100","0001111111111000",
+            "0000144444410000","0001441441441000","0001714444171000","0001714444171000",
+            "0000111111110000","0000111001110000","0001111001111000","0001111001111000"
         ],
-        [ // 2: 고양이 (동물형)
-            "0000000000000000","0001100000011000","001cc100001cc100","01cccc1111cccc10",
-            "01cccccccccccc10","01cc11cccc11cc10","01cc11cccc11cc10","01cccccccccccc10",
-            "001cccc11cccc100","0001ccc11ccc1000","000011cccc110000","00001cccccc10000",
-            "0001cc7777cc1000","0001cc7777cc1000","0000111001110000","0000000000000000"
+        [ // Purple Agent (색상만 6)
+            "0000011111100000","0000166666610000","0001666666661000","0001122222211000",
+            "0012211221122100","0012222222222100","0012122222212100","0001111111111000",
+            "0000166666610000","0001661661661000","0001716666171000","0001716666171000",
+            "0000111111110000","0000111001110000","0001111001111000","0001111001111000"
         ],
-        [ // 3: 마법사 (인간형)
-            "0000000110000000","0000001661000000","0000016666100000","0000166666610000",
-            "0001111111111000","0000012222100000","0000121221210000","0000121221210000",
-            "0000012222100000","0000166666610000","0001666666661000","0001666666661000",
-            "0001666666661000","0001666666661000","0000111001110000","0000000000000000"
+        [ // Yellow Agent (색상만 9)
+            "0000011111100000","0000199999910000","0001999999991000","0001122222211000",
+            "0012211221122100","0012222222222100","0012122222212100","0001111111111000",
+            "0000199999910000","0001991991991000","0001719999171000","0001719999171000",
+            "0000111111110000","0000111001110000","0001111001111000","0001111001111000"
         ],
-        [ // 4: 기사 (갑옷형)
-            "0000000000000000","0000011111100000","0000188888810000","0001888888881000",
-            "0018881111888100","0018881111888100","0018888888888100","0001881111881000",
-            "0000118888110000","0001888888881000","0001888888881000","0001888888881000",
-            "0001888118881000","0001888118881000","0000111001110000","0000000000000000"
-        ],
-        [ // 5: 유령 (비행형)
-            "0000000000000000","0000011111100000","0000177777710000","0001777777771000",
-            "0017711771177100","0017711771177100","0017777777777100","0017777117777100",
-            "0017777777777100","0017777777777100","0017777777777100","0001771771771000",
-            "0001771771771000","0000110110110000","0000000000000000","0000000000000000"
+        [ // 좀비 (Zombie) - 팔을 앞으로 뻗음
+            "0000011111100000","0000155555510000","0001555555551000","0001155555511000",
+            "0015513553155100","0155555555555510","0155555115555510","0111111111111110",
+            "1551188888811551","1551888888881551","1111888888881111","0001888888881000",
+            "0000111111110000","0000111001110000","0001111001111000","0001111001111000"
         ]
     ];
 
-    // 맵 장식용 타일 (잔디, 물, 모래, 나무, 바위, 꽃, 유적)
-    const TileData = {
-        water: ["bbbbbbbbbbbbbbbb","bbbbbbbbbbbbbbbb","bb44bbbbbbbbbbbb","bbbbbbbbbbbb44bb"],
-        sand:  ["dddddddddddddddd","dddddddddddddddd","ddcddddddddddddd","dddddddddddcdddd"],
-        grass: ["5555555555555555","55e5555555555555","5555555555e55555","5555555555555555"],
-        tree:  ["0001111000","0015555100","0155ee5510","155eeee551","15eeeee551","0155ee5510","0001aa1000","0001aa1000","0011aa1100"],
-        rock:  ["00000000","00111100","01888810","18899881","18999981","01888810","00111100","00000000"],
-        flower:["00000000","00011000","00133100","013f3310","00133100","00011000","00011000","00155100"],
-        ruin:  ["1111111111111111","1888188888188881","1111111111111111","1888881888188881"]
-    };
+    const Sprites = { chars: [], zombie: null, map: null, meteor: null };
+    let mapGrid = []; // 충돌 및 지형 판정용 (roof = 쓰나미 안전지대)
+    const TILE = 64; // 타일 크기를 키워 시원한 도시 스케일 구현
+    const COLS = 40, ROWS = 40; // 2560 x 2560 픽셀 맵
 
-    const Sprites = { chars: [], mapCanvas: null, meteor: null };
-    let mapGrid = []; // 충돌 처리를 위한 논리적 맵 배열
-    const TILE_SIZE = 32;
-    const GRID_W = 60, GRID_H = 60; // 맵 크기 1920x1920
-
-    function buildSprite(dataArr, w, h) {
-        const c = document.createElement('canvas'); c.width = w; c.height = h;
+    function buildSprite(dataArr) {
+        const c = document.createElement('canvas'); c.width = 16; c.height = 16;
         const cx = c.getContext('2d');
-        for(let y=0; y<h; y++){
-            for(let x=0; x<w; x++){
-                let p = dataArr[y%dataArr.length][x];
+        for(let y=0; y<16; y++){
+            for(let x=0; x<16; x++){
+                let p = dataArr[y][x];
                 if(Pal[p]) { cx.fillStyle = Pal[p]; cx.fillRect(x,y,1,1); }
             }
         }
         return c;
     }
 
-    // 절차적 맵 생성기 (충돌 영역 포함)
-    function generateMap() {
-        const mapC = document.createElement('canvas');
-        mapC.width = GRID_W * TILE_SIZE; mapC.height = GRID_H * TILE_SIZE;
-        const cx = mapC.getContext('2d');
+    // 캔버스 API를 활용한 정교한 도시 맵 (아스팔트, 차선, 인도, 건물) 프로시저럴 생성
+    function generateCityMap() {
+        const m = document.createElement('canvas');
+        m.width = COLS * TILE; m.height = ROWS * TILE;
+        const cx = m.getContext('2d');
         cx.imageSmoothingEnabled = false;
 
-        const tWater = buildSprite(TileData.water, 16, 16);
-        const tSand = buildSprite(TileData.sand, 16, 16);
-        const tGrass = buildSprite(TileData.grass, 16, 16);
-        const tTree = buildSprite(TileData.tree, 10, 9);
-        const tRock = buildSprite(TileData.rock, 8, 8);
-        const tFlower = buildSprite(TileData.flower, 8, 8);
-        const tRuin = buildSprite(TileData.ruin, 16, 4);
-
-        // 1. 물로 덮기
-        mapGrid = Array(GRID_H).fill().map(()=>Array(GRID_W).fill('water'));
-        
-        // 2. 중앙 섬 생성
-        for(let i=0; i<30; i++) {
-            let px = GRID_W/2 + (Math.random()-0.5)*20;
-            let py = GRID_H/2 + (Math.random()-0.5)*20;
-            let rad = 6 + Math.random()*10;
-            for(let y=0; y<GRID_H; y++) {
-                for(let x=0; x<GRID_W; x++) {
-                    if(Math.hypot(x-px, y-py) < rad) mapGrid[y][x] = 'land';
-                }
+        // 1. 기본 인도(Sidewalk) 콘크리트 베이스
+        cx.fillStyle = '#94a3b8'; cx.fillRect(0, 0, m.width, m.height);
+        // 인도 타일 패턴
+        cx.fillStyle = '#cbd5e1';
+        for(let y=0; y<m.height; y+=16) {
+            for(let x=0; x<m.width; x+=16) {
+                if((x+y)%32 === 0) cx.fillRect(x, y, 16, 16);
             }
         }
 
-        // 3. 렌더링 및 데코레이션 배치
-        for(let y=0; y<GRID_H; y++) {
-            for(let x=0; x<GRID_W; x++) {
-                if(mapGrid[y][x] === 'water') {
-                    cx.drawImage(tWater, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                } else {
-                    // 해변가 판별
-                    let isEdge = false;
-                    for(let dy=-1; dy<=1; dy++){
-                        for(let dx=-1; dx<=1; dx++){
-                            if(mapGrid[y+dy] && mapGrid[y+dy][x+dx] === 'water') isEdge = true;
-                        }
-                    }
-                    if(isEdge) {
-                        cx.drawImage(tSand, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                    } else {
-                        cx.drawImage(tGrass, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                        // 랜덤 데코레이션
-                        let rand = Math.random();
-                        if(rand < 0.08) cx.drawImage(tTree, x*TILE_SIZE+4, y*TILE_SIZE-10, 24, 40); // 나무
-                        else if(rand < 0.12) cx.drawImage(tRock, x*TILE_SIZE+8, y*TILE_SIZE+8, 16, 16); // 바위
-                        else if(rand < 0.18) cx.drawImage(tFlower, x*TILE_SIZE+8, y*TILE_SIZE+8, 16, 16); // 꽃
-                        else if(rand < 0.20) cx.drawImage(tRuin, x*TILE_SIZE, y*TILE_SIZE+10, 32, 8); // 유적 벽돌
-                    }
+        mapGrid = Array(ROWS).fill().map(()=>Array(COLS).fill('sidewalk'));
+
+        // 2. 도로(Road) 격자 생성 (매 8칸마다 2칸 너비의 도로)
+        cx.fillStyle = '#1e293b'; // 아스팔트 색
+        for(let i=0; i<COLS; i++) {
+            if(i % 8 === 0 || i % 8 === 1) { // 수직 도로
+                cx.fillRect(i*TILE, 0, TILE, m.height);
+                for(let r=0; r<ROWS; r++) mapGrid[r][i] = 'road';
+            }
+            if(i % 8 === 0 || i % 8 === 1) { // 수평 도로
+                cx.fillRect(0, i*TILE, m.width, TILE);
+                for(let c=0; c<COLS; c++) mapGrid[i][c] = 'road';
+            }
+        }
+
+        // 중앙 점선 (노란 차선)
+        cx.fillStyle = '#facc15';
+        for(let i=1; i<COLS; i+=8) {
+            for(let step=0; step<m.height; step+=30) cx.fillRect(i*TILE - 4, step, 8, 15); // 수직
+            for(let step=0; step<m.width; step+=30) cx.fillRect(step, i*TILE - 4, 15, 8); // 수평
+        }
+
+        // 3. 빌딩 옥상 생성 (블록 내부) - 쓰나미 대피소
+        for(let y=0; y<ROWS; y++) {
+            for(let x=0; x<COLS; x++) {
+                // 도로가 아닌 구역의 중앙에 건물 배치
+                if(x%8 >= 3 && x%8 <= 6 && y%8 >= 3 && y%8 <= 6) {
+                    mapGrid[y][x] = 'roof';
+                    // 건물 입체감 (그림자 및 옥상)
+                    cx.fillStyle = '#0f172a'; // 그림자/벽
+                    cx.fillRect(x*TILE + 4, y*TILE + 4, TILE, TILE);
+                    cx.fillStyle = ((x+y)%3 === 0) ? '#b91c1c' : '#0284c7'; // 빨간지붕 or 파란지붕
+                    cx.fillRect(x*TILE, y*TILE, TILE, TILE);
+                    cx.fillStyle = 'rgba(255,255,255,0.2)'; // 옥상 헬기장 선 등
+                    cx.fillRect(x*TILE+4, y*TILE+4, TILE-8, TILE-8);
                 }
             }
         }
-        Sprites.mapCanvas = mapC;
+        Sprites.map = m;
     }
 
     function initAssets() {
-        for(let i=0; i<6; i++) {
-            Sprites.chars[i] = buildSprite(CharData[i], 16, 16);
-            let pCtx = document.getElementById('cp'+i).getContext('2d');
-            pCtx.imageSmoothingEnabled = false;
-            pCtx.drawImage(Sprites.chars[i], 0, 0, 48, 48); // UI 프리뷰용 3배 확대
+        for(let i=0; i<4; i++) {
+            Sprites.chars[i] = buildSprite(CharData[i]);
+            let px = document.getElementById('cp'+i).getContext('2d');
+            px.imageSmoothingEnabled = false;
+            px.drawImage(Sprites.chars[i], 0, 0, 48, 48);
         }
+        Sprites.zombie = buildSprite(CharData[4]);
         
-        // 운석 스프라이트 절차적 생성
+        // 운석 스프라이트
         const mc = document.createElement('canvas'); mc.width=32; mc.height=32;
-        const mCtx = mc.getContext('2d');
-        let grad = mCtx.createRadialGradient(16,16,0, 16,16,16);
-        grad.addColorStop(0, '#fee761'); grad.addColorStop(0.3, '#f9a31b'); grad.addColorStop(0.7, '#e43b44'); grad.addColorStop(1, 'transparent');
-        mCtx.fillStyle = grad; mCtx.beginPath(); mCtx.arc(16,16,16,0,Math.PI*2); mCtx.fill();
+        const mx = mc.getContext('2d');
+        let grad = mx.createRadialGradient(16,16,0, 16,16,16);
+        grad.addColorStop(0, '#fef08a'); grad.addColorStop(0.4, '#ea580c'); grad.addColorStop(1, 'transparent');
+        mx.fillStyle = grad; mx.beginPath(); mx.arc(16,16,16,0,Math.PI*2); mx.fill();
         Sprites.meteor = mc;
 
-        generateMap();
+        generateCityMap();
     }
 
     /* =========================================================================
-       [ 2. 게임 시스템 (상점, 인벤토리, 설정) ]
+       [ 2. UI 컨트롤러 (로그인, 회원가입, 학생 모드) ]
        ========================================================================= */
-    let gameState = 'landing';
-    const player = { x: 0, y: 0, w: 40, h: 40, speed: 6, hp: 100, state: 'alive', char: 0, revive: 0, name: '' };
-    const camera = { x: 0, y: 0, tx: 0, ty: 0, zoom: 1.5 };
-    const inventory = { heal: 0, speed: 0, coins: 0 };
-    let speedBuffTimer = 0;
+    let myId = '';
     
-    let peer = null, connections = [], roomCode = '', isHost = false, otherPlayers = {};
-    let disasters = [], gameTime = 0, keys = {x:0, y:0};
-    let settings = { bgm: true, sfx: true };
+    function switchTab(t) {
+        document.getElementById('tabLogin').className = 'tab' + (t==='login'?' active':'');
+        document.getElementById('tabSignup').className = 'tab' + (t==='signup'?' active':'');
+        document.getElementById('formLogin').style.display = t==='login'?'block':'none';
+        document.getElementById('formSignup').style.display = t==='signup'?'block':'none';
+    }
 
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    let W, H;
+    function processSignup() {
+        const id = document.getElementById('regId').value.trim();
+        if(!id) return alert('아이디를 입력하세요.');
+        alert('생존자 등록이 완료되었습니다. 로그인해주세요.');
+        switchTab('login'); document.getElementById('loginId').value = id;
+    }
+
+    function processLogin() {
+        myId = document.getElementById('loginId').value.trim();
+        if(!myId) return alert('아이디를 입력하세요.');
+        document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));
+        document.getElementById('lobbyView').classList.add('active');
+    }
+
+    function toggleStudentMode() {
+        const type = document.getElementById('userType').value;
+        document.getElementById('gradeSelect').style.display = type === 'student' ? 'inline-block' : 'none';
+    }
+
+    /* =========================================================================
+       [ 3. 네트워크 및 게임 시스템 (PeerJS, 재해 엔진) ]
+       ========================================================================= */
+    const player = { x: 0, y: 0, w: 40, h: 40, speed: 7, hp: 100, state: 'alive', char: 0, revive: 0 };
+    const camera = { x: 0, y: 0, zoom: 1.2 };
+    let peer = null, connections = [], roomCode = '', isHost = false, otherPlayers = {};
     
+    // 재해 배열 및 글로벌 상태
+    let disasters = []; // meteors, tsunami
+    let zombies = [];
+    let isSandstorm = false; let sandstormTimer = 0;
+    
+    let gameTime = 0, keys = {x:0, y:0};
+    const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+    let W, H;
+
     function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; ctx.imageSmoothingEnabled = false; }
     window.addEventListener('resize', resize); resize();
 
-    function navTo(id) { document.querySelectorAll('.view').forEach(e => e.classList.remove('active')); if(id) document.getElementById(id).classList.add('active'); }
-    function openModal(id) { document.getElementById(id).classList.add('active'); updateShopUI(); }
-    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-    
     function selectChar(idx) {
         player.char = idx;
         document.querySelectorAll('.char-box').forEach((e, i) => e.className = 'char-box' + (i===idx?' selected':''));
     }
 
-    function toggleSetting(type) {
-        settings[type] = !settings[type];
-        document.getElementById('btn'+(type.charAt(0).toUpperCase()+type.slice(1))).innerText = settings[type] ? 'ON' : 'OFF';
-    }
-
-    function updateShopUI() {
-        document.getElementById('coinDisplay').innerText = inventory.coins;
-        document.getElementById('inGameCoin').innerText = inventory.coins;
-        document.getElementById('invHeal').innerText = inventory.heal;
-        document.getElementById('invSpeed').innerText = inventory.speed;
-    }
-
-    function buyItem(type, cost) {
-        if(inventory.coins >= cost) {
-            inventory.coins -= cost;
-            inventory[type]++;
-            updateShopUI();
-            if(settings.sfx) alert('구매 완료!');
-        } else {
-            alert('코인이 부족합니다.');
-        }
-    }
-
-    function useItem(type) {
-        if(gameState !== 'game' || player.state === 'ghost' || inventory[type] <= 0) return;
-        inventory[type]--;
-        if(type === 'heal') {
-            player.hp = Math.min(100, player.hp + 40);
-        } else if(type === 'speed') {
-            speedBuffTimer = 600; // 600프레임 (약 10초)
-        }
-        updateShopUI();
-    }
-
-    /* =========================================================================
-       [ 3. 네트워크 (PeerJS) 및 시작 ]
-       ========================================================================= */
     function initNet(id, cb) {
-        peer = new Peer("svr26_" + id);
+        peer = new Peer("urb_srv_" + id);
         peer.on('open', cb);
         peer.on('connection', c => {
             if(!connections.includes(c)) connections.push(c);
             c.on('data', d => {
                 if(d.type === 'u') otherPlayers[c.peer] = d.p;
-                else if(d.type === 'start') startGame();
+                else if(d.type === 'start') startGameClient();
                 else if(d.type === 'revive' && player.state === 'ghost') {
                     player.revive++;
                     if(player.revive >= 5) { player.state = 'alive'; player.hp = 50; player.revive = 0; }
+                }
+                else if(d.type === 'env') { // 호스트로부터 재해 정보 동기화
+                    disasters = d.dis; zombies = d.zom; isSandstorm = d.sand;
                 }
             });
         });
@@ -444,185 +384,232 @@
     function createRoom() {
         roomCode = Math.random().toString(36).substring(2,5).toUpperCase();
         isHost = true;
-        initNet(roomCode, () => { alert('방 생성 완료! 코드: '+roomCode); startGame(); });
+        initNet(roomCode, () => { alert('도시 서버 오픈! 코드: '+roomCode); startGameClient(); });
     }
     
     function joinRoom() {
         roomCode = document.getElementById('joinCode').value.toUpperCase();
         if(roomCode.length !== 3) return;
-        initNet("usr_"+Math.random().toString(36).substring(2,6), () => {
-            const c = peer.connect("svr26_" + roomCode);
-            c.on('open', () => { alert('접속 성공! 대기중...'); startGame(); });
+        initNet("usr_"+Math.random().toString(36).substring(2,7), () => {
+            const c = peer.connect("urb_srv_" + roomCode);
+            c.on('open', () => { alert('접속 완료! 호스트 대기중...'); startGameClient(); });
         });
     }
 
-    function startGame() {
-        player.name = document.getElementById('playerName').value || '생존자';
-        navTo(null); gameState = 'game';
+    function startGameClient() {
+        document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('joyZone').style.display = 'block';
         document.getElementById('hudCode').innerText = roomCode;
         
-        // 중앙 섬 맵 스폰
-        player.x = (GRID_W * TILE_SIZE) / 2; 
-        player.y = (GRID_H * TILE_SIZE) / 2; 
+        // 도로 한가운데 스폰 (맵 중앙)
+        player.x = (COLS * TILE) / 2; player.y = (ROWS * TILE) / 2; 
         camera.x = player.x; camera.y = player.y;
 
         if(isHost) {
             connections.forEach(c => c.send({type: 'start'}));
-            // 1초마다 생존 시간 및 코인 증가
-            setInterval(() => { 
-                gameTime++; 
-                inventory.coins += 2; // 초당 2코인 지급
-                document.getElementById('timeVal').innerText = gameTime; 
-                updateShopUI();
-            }, 1000);
-            
-            // 재해 생성
-            setInterval(() => {
-                let s = 1 + (gameTime*0.03);
-                disasters.push({ x: player.x+(Math.random()-0.5)*1000, y: player.y-600, vy: (Math.random()*4+4)*s, size: 70*s });
-            }, 1000);
+            setInterval(() => { gameTime++; document.getElementById('timeVal').innerText = gameTime; hostDisasterLogic(); }, 1000);
+            setInterval(hostPhysicsTick, 1000/30); // 30fps 서버 틱
         }
-        requestAnimationFrame(loop);
+        requestAnimationFrame(gameLoop);
     }
 
+    /* === 호스트 전용 재해 엔진 로직 === */
+    function hostDisasterLogic() {
+        // 1. 운석 스폰
+        if(Math.random() < 0.6) {
+            disasters.push({ type: 'meteor', x: player.x + (Math.random()-0.5)*1200, y: player.y - 800, vy: 12 + Math.random()*5, size: 80 });
+        }
+        // 2. 좀비 스폰 (시간이 지날수록 확률 증가)
+        if(zombies.length < 15 && Math.random() < 0.3 + (gameTime*0.01)) {
+            zombies.push({ id: Math.random(), x: player.x + (Math.random()>0.5?800:-800), y: player.y + (Math.random()>0.5?800:-800), speed: 3.5 });
+        }
+        // 3. 쓰나미 발생 (가끔)
+        if(!disasters.find(d=>d.type==='tsunami') && Math.random() < 0.05 && gameTime > 10) {
+            disasters.push({ type: 'tsunami', y: -1000, vy: 6 });
+        }
+        // 4. 모래 폭풍 발생
+        if(sandstormTimer <= 0 && Math.random() < 0.08 && gameTime > 20) {
+            sandstormTimer = 10; // 10초 유지
+        } else if(sandstormTimer > 0) {
+            sandstormTimer--;
+        }
+        isSandstorm = sandstormTimer > 0;
+    }
+
+    function hostPhysicsTick() {
+        // 운석 물리
+        for(let i=disasters.length-1; i>=0; i--) {
+            let d = disasters[i];
+            if(d.type === 'meteor') {
+                d.y += d.vy;
+                if(d.y > player.y + 1000) disasters.splice(i,1);
+            } else if(d.type === 'tsunami') {
+                d.y += d.vy;
+                if(d.y > (ROWS*TILE) + 1000) disasters.splice(i,1);
+            }
+        }
+        
+        // 좀비 AI (가장 가까운 생존 플레이어 추적)
+        zombies.forEach(z => {
+            let tx = player.x, ty = player.y; // 기본 타겟은 호스트
+            // 멀티플레이 시 가장 가까운 타겟 계산 가능하나 여기선 간소화하여 호스트 우선
+            let dx = tx - z.x, dy = ty - z.y;
+            let dist = Math.hypot(dx, dy);
+            if(dist > 0) { z.x += (dx/dist)*z.speed; z.y += (dy/dist)*z.speed; }
+        });
+
+        // 상태 브로드캐스트
+        connections.forEach(c => {
+            if(c.open) c.send({type: 'env', dis: disasters, zom: zombies, sand: isSandstorm});
+        });
+    }
+
+
     /* =========================================================================
-       [ 4. 물리(바다 충돌 방지) 및 렌더링 ]
+       [ 4. 입력, 충돌 및 클라이언트 렌더링 ]
        ========================================================================= */
     const joyZone = document.getElementById('joyZone'), joyStick = document.getElementById('joyStick'), joyBase = document.getElementById('joyBase');
     let jAct = false, jOri = {x:0, y:0}, maxJ = 40;
-    
     joyZone.addEventListener('touchstart', e => { jAct=true; let r=joyBase.getBoundingClientRect(); jOri={x:r.left+r.width/2, y:r.top+r.height/2}; updateJ(e.touches[0]); });
     joyZone.addEventListener('touchmove', e => { if(jAct){ e.preventDefault(); updateJ(e.touches[0]); } });
     joyZone.addEventListener('touchend', () => { jAct=false; joyStick.style.transform=`translate(0,0)`; keys.x=0; keys.y=0; });
-    
-    function updateJ(t) {
-        let dx = t.clientX - jOri.x, dy = t.clientY - jOri.y, d = Math.hypot(dx,dy);
-        if(d > maxJ) { dx = (dx/d)*maxJ; dy = (dy/d)*maxJ; }
-        joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
-        keys.x = dx/maxJ; keys.y = dy/maxJ;
-    }
+    function updateJ(t) { let dx=t.clientX-jOri.x, dy=t.clientY-jOri.y, d=Math.hypot(dx,dy); if(d>maxJ){dx=(dx/d)*maxJ; dy=(dy/d)*maxJ;} joyStick.style.transform=`translate(${dx}px,${dy}px)`; keys.x=dx/maxJ; keys.y=dy/maxJ; }
 
     window.addEventListener('keydown', e => { if(['w','ArrowUp'].includes(e.key))keys.y=-1; if(['s','ArrowDown'].includes(e.key))keys.y=1; if(['a','ArrowLeft'].includes(e.key))keys.x=-1; if(['d','ArrowRight'].includes(e.key))keys.x=1; });
     window.addEventListener('keyup', e => { if(['w','s','ArrowUp','ArrowDown'].includes(e.key))keys.y=0; if(['a','d','ArrowLeft','ArrowRight'].includes(e.key))keys.x=0; });
 
     // 부활 터치
     canvas.addEventListener('pointerdown', e => {
-        if(gameState !== 'game') return;
+        if(player.state === 'ghost') return;
         const wx = (e.clientX - W/2) / camera.zoom + camera.x;
         const wy = (e.clientY - H/2) / camera.zoom + camera.y;
         Object.keys(otherPlayers).forEach(id => {
             let op = otherPlayers[id];
             if(op.s === 'ghost' && Math.hypot(op.x - wx, op.y - wy) < 80) {
-                let conn = connections.find(c => c.peer === id);
-                if(conn && conn.open) conn.send({type: 'revive'});
+                let c = connections.find(c => c.peer === id);
+                if(c && c.open) c.send({type: 'revive'});
             }
         });
     });
 
-    function loop(time) {
-        if(gameState !== 'game') return;
+    function gameLoop(time) {
+        // --- 1. 플레이어 이동 및 모래폭풍 물리 적용 ---
+        let spd = player.state === 'ghost' ? player.speed * 0.5 : player.speed;
+        let windX = isSandstorm ? 3 : 0; // 모래폭풍 시 우측으로 밀림
         
-        // 이동 및 충돌 처리
-        let currentSpeed = player.state === 'ghost' ? player.speed * 0.5 : player.speed;
-        if(speedBuffTimer > 0) { currentSpeed += 4; speedBuffTimer--; }
+        player.x += (keys.x * spd) + windX; 
+        player.y += keys.y * spd;
         
-        let nextX = player.x + keys.x * currentSpeed;
-        let nextY = player.y + keys.y * currentSpeed;
-        
-        // 바다(water) 타일 충돌 검사 (슬라이딩 구현)
-        let tX = Math.floor(nextX / TILE_SIZE);
-        let tY = Math.floor(nextY / TILE_SIZE);
-        let currTX = Math.floor(player.x / TILE_SIZE);
-        let currTY = Math.floor(player.y / TILE_SIZE);
+        // 맵 이탈 방지
+        player.x = Math.max(0, Math.min(player.x, COLS*TILE));
+        player.y = Math.max(0, Math.min(player.y, ROWS*TILE));
 
-        // 유령 상태이거나 목표 지점이 땅이면 대각선 이동 허용
-        if (player.state === 'ghost' || (mapGrid[tY] && mapGrid[tY][tX] !== 'water')) {
-            player.x = nextX; player.y = nextY;
-        } else {
-            // 막혔을 경우 X, Y 축을 분리하여 벽 타기(Sliding) 처리
-            if(mapGrid[currTY] && mapGrid[currTY][tX] !== 'water') player.x = nextX;
-            if(mapGrid[tY] && mapGrid[tY][currTX] !== 'water') player.y = nextY;
-        }
+        camera.x += (player.x - camera.x) * 0.1;
+        camera.y += (player.y - camera.y) * 0.1;
 
-        // 카메라 러프 추적
-        camera.tx = player.x; camera.ty = player.y;
-        camera.x += (camera.tx - camera.x) * 0.1;
-        camera.y += (camera.ty - camera.y) * 0.1;
+        // --- 2. 클라이언트 데미지 판정 ---
+        if(player.state === 'alive') {
+            let pTX = Math.floor(player.x / TILE);
+            let pTY = Math.floor(player.y / TILE);
+            let isOnRoof = (mapGrid[pTY] && mapGrid[pTY][pTX] === 'roof');
 
-        // 재해 물리 처리
-        if(isHost) {
-            for(let i=disasters.length-1; i>=0; i--){
-                let d = disasters[i]; d.y += d.vy;
-                if(player.state === 'alive' && Math.hypot(player.x - d.x, player.y - d.y) < d.size*0.4) {
-                    player.hp -= 15; disasters.splice(i, 1);
-                    if(player.hp <= 0) { player.hp=0; player.state='ghost'; }
-                    continue;
+            let tsunamiActive = false;
+            
+            disasters.forEach(d => {
+                if(d.type === 'meteor' && Math.hypot(player.x - d.x, player.y - d.y) < d.size*0.4) {
+                    player.hp -= 20; d.y += 2000; // Hit & remove logic bypass
                 }
-                if(d.y > camera.y + H/camera.zoom) disasters.splice(i,1);
-            }
+                else if(d.type === 'tsunami') {
+                    tsunamiActive = true;
+                    // 쓰나미 파도 라인에 닿았는데 옥상이 아니면 데미지
+                    if(player.y > d.y && player.y < d.y + 400 && !isOnRoof) {
+                        player.hp -= 2; // 프레임당 도트 데미지
+                    }
+                }
+            });
+
+            zombies.forEach(z => {
+                if(Math.hypot(player.x - z.x, player.y - z.y) < 30) player.hp -= 1; 
+            });
+
+            document.getElementById('disasterAlert').style.display = tsunamiActive ? 'block' : 'none';
+
+            if(player.hp <= 0) { player.hp=0; player.state='ghost'; }
         }
 
-        // HUD 업데이트
+        // --- 3. HUD 및 네트워킹 ---
         const hpBar = document.getElementById('hpBar'), hpTxt = document.getElementById('hpText');
-        hpBar.style.width = Math.max(0, (player.hp/100)*100) + '%';
+        hpBar.style.width = Math.max(0, player.hp) + '%';
         if(player.state === 'ghost') {
-            hpBar.style.background = 'transparent'; hpTxt.innerText = `유령 (부활터치 ${player.revive}/5)`; hpTxt.style.color = '#2ce8f5';
+            hpBar.style.background = 'transparent'; hpTxt.innerText = `유령 (부활터치 ${player.revive}/5)`; hpTxt.style.color = '#0ea5e9';
         } else {
-            hpBar.style.background = player.hp < 30 ? '#e43b44' : '#3e8948'; hpTxt.innerText = `${Math.floor(player.hp)} / 100`; hpTxt.style.color = '#fff';
+            hpBar.style.background = player.hp < 30 ? '#b91c1c' : '#16a34a'; hpTxt.innerText = `${Math.floor(player.hp)} / 100`; hpTxt.style.color = '#fff';
         }
 
-        // 네트워크 동기화
-        if(Math.floor(time)%4===0 && peer) {
-            connections.forEach(c => { if(c.open) c.send({type:'u', p:{x:player.x, y:player.y, s:player.state, c:player.char, n:player.name}}); });
+        if(Math.floor(time)%3===0 && peer) {
+            connections.forEach(c => { if(c.open) c.send({type:'u', p:{x:player.x, y:player.y, s:player.state, c:player.char, n:myId}}); });
         }
 
-        /* --- 렌더링 파트 --- */
-        ctx.fillStyle = '#0284c7'; ctx.fillRect(0, 0, W, H);
-        
+        // --- 4. 렌더링 ---
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
         ctx.save();
         ctx.translate(W/2, H/2); ctx.scale(camera.zoom, camera.zoom); ctx.translate(-camera.x, -camera.y);
 
-        // 1. 맵 렌더링
-        if(Sprites.mapCanvas) ctx.drawImage(Sprites.mapCanvas, 0, 0);
+        // 맵 
+        if(Sprites.map) ctx.drawImage(Sprites.map, 0, 0);
 
-        // 2. 캐릭터 렌더링 (스피드 버프 시 잔상 효과)
-        if(speedBuffTimer > 0 && player.state !== 'ghost') {
-            ctx.globalAlpha = 0.3;
-            drawPxl(player.x - keys.x*10, player.y - keys.y*10, player.char, player.state, '', false, 0);
-            ctx.globalAlpha = 1;
+        // 좀비 
+        zombies.forEach(z => {
+            let b = Math.sin(time/40)*3;
+            ctx.drawImage(Sprites.zombie, z.x - 20, z.y - 40 + b, 40, 40);
+        });
+
+        // 타 유저 및 본인
+        Object.values(otherPlayers).forEach(p => drawAgent(p.x, p.y, p.c, p.s, p.n, false, time));
+        drawAgent(player.x, player.y, player.char, player.state, myId, true, time);
+
+        // 재해 (운석 & 쓰나미)
+        disasters.forEach(d => {
+            if(d.type === 'meteor') {
+                ctx.drawImage(Sprites.meteor, d.x - d.size/2, d.y - d.size/2, d.size, d.size);
+            } else if(d.type === 'tsunami') {
+                ctx.fillStyle = 'rgba(2, 132, 199, 0.7)'; // 반투명 푸른 물결
+                ctx.fillRect(0, d.y, COLS*TILE, 400);
+                ctx.fillStyle = '#fff';
+                for(let w=0; w<COLS*TILE; w+=60) ctx.fillRect(w + Math.sin(time/200)*20, d.y + 10, 30, 10); // 거품
+            }
+        });
+        ctx.restore();
+
+        // 화면 덮는 모래폭풍 오버레이 이펙트
+        if(isSandstorm) {
+            ctx.fillStyle = 'rgba(217, 119, 6, 0.4)'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = 'rgba(253, 230, 138, 0.6)';
+            for(let i=0; i<30; i++) {
+                let sx = ((time*2 + i*80) % W);
+                let sy = (i*40) % H;
+                ctx.fillRect(sx, sy, Math.random()*100 + 50, 4);
+            }
         }
 
-        Object.values(otherPlayers).forEach(p => drawPxl(p.x, p.y, p.c, p.s, p.n, false, time));
-        drawPxl(player.x, player.y, player.char, player.state, player.name, true, time);
-
-        // 3. 재해 렌더링
-        disasters.forEach(d => {
-            ctx.drawImage(Sprites.meteor, d.x - d.size/2, d.y - d.size/2, d.size, d.size);
-        });
-        
-        ctx.restore();
-        requestAnimationFrame(loop);
+        requestAnimationFrame(gameLoop);
     }
 
-    function drawPxl(x, y, cIdx, state, name, isMe, time) {
+    function drawAgent(x, y, cIdx, state, name, isMe, time) {
         ctx.save();
         if(state === 'ghost') ctx.globalAlpha = 0.5;
-        
         let bounce = (isMe && (keys.x !== 0 || keys.y !== 0)) ? Math.sin(time/50)*4 : 0;
         
         if(Sprites.chars[cIdx]) {
             ctx.drawImage(Sprites.chars[cIdx], x - player.w/2, y - player.h + bounce, player.w, player.h);
         }
 
-        if(name) {
-            ctx.globalAlpha = 1;
-            ctx.fillStyle = '#181425'; ctx.fillRect(x - 30, y - player.h - 22 + bounce, 60, 16);
-            ctx.fillStyle = isMe ? '#ffcd75' : '#fff';
-            ctx.font = '10px Galmuri11'; ctx.textAlign = 'center';
-            ctx.fillText(name, x, y - player.h - 10 + bounce);
-        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#111'; ctx.fillRect(x - 30, y - player.h - 22 + bounce, 60, 16);
+        ctx.fillStyle = isMe ? '#facc15' : '#fff';
+        ctx.font = '10px Galmuri11'; ctx.textAlign = 'center';
+        ctx.fillText(name || 'User', x, y - 10 - player.h + bounce);
         ctx.restore();
     }
 
